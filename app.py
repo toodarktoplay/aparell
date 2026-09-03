@@ -15,6 +15,7 @@ import tempfile
 
 import pandas as pd
 import streamlit as st
+from PIL import Image as PILImage
 from openpyxl import load_workbook
 from openpyxl.drawing.image import Image as XLImage
 
@@ -68,6 +69,19 @@ def coincide_con_limite(ref, nombre_archivo):
             return True
         idx = nombre_archivo.find(ref, idx + 1)
     return False
+
+
+def preparar_imagen_para_excel(ruta):
+    """Convierte cualquier imagen a JPEG en memoria antes de insertarla en
+    el Excel. Evita que formatos como WEBP, o extensiones con mayúsculas,
+    hagan fallar el guardado del Excel (openpyxl no los soporta bien)."""
+    im = PILImage.open(ruta)
+    if im.mode not in ("RGB", "L"):
+        im = im.convert("RGB")
+    buf = io.BytesIO()
+    im.save(buf, format="JPEG", quality=90)
+    buf.seek(0)
+    return buf
 
 
 def volcar_fotos(subidas, destino):
@@ -150,7 +164,8 @@ def procesar(excel_bytes, carpeta_fotos, progreso):
         insertada = False
         if ruta:
             try:
-                img = XLImage(ruta)
+                buf_img = preparar_imagen_para_excel(ruta)
+                img = XLImage(buf_img)
                 img.width, img.height = IMG_W, IMG_H
                 ws.row_dimensions[row].height = ROW_H
                 ws.add_image(img, f"A{row}")
