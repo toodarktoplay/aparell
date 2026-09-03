@@ -86,8 +86,14 @@ def volcar_fotos(subidas, destino):
 
 def indexar_fotos(carpeta):
     indice = {}
-    for root, _, files in os.walk(carpeta):
+    for root, dirs, files in os.walk(carpeta):
+        # Ignorar la carpeta de metadatos que macOS mete al comprimir ZIP
+        dirs[:] = [d for d in dirs if d != "__MACOSX"]
         for f in files:
+            # Ignorar archivos ocultos de metadatos de macOS (._foto.jpg),
+            # que no son imágenes de verdad aunque tengan esa extensión.
+            if f.startswith("._") or f.startswith("."):
+                continue
             if f.lower().endswith(EXTS):
                 nombre = os.path.splitext(f)[0].strip().upper()
                 indice.setdefault(nombre, os.path.join(root, f))
@@ -141,13 +147,18 @@ def procesar(excel_bytes, carpeta_fotos, progreso):
     for i, row in enumerate(range(2, ws.max_row + 1), start=1):
         ref_norm = normalizar_ref(ws.cell(row=row, column=col_ref_idx).value)
         ruta = buscar_foto(ref_norm, indice) if ref_norm else None
+        insertada = False
         if ruta:
-            img = XLImage(ruta)
-            img.width, img.height = IMG_W, IMG_H
-            ws.row_dimensions[row].height = ROW_H
-            ws.add_image(img, f"A{row}")
-            fotos_ok += 1
-        elif ref_norm:
+            try:
+                img = XLImage(ruta)
+                img.width, img.height = IMG_W, IMG_H
+                ws.row_dimensions[row].height = ROW_H
+                ws.add_image(img, f"A{row}")
+                fotos_ok += 1
+                insertada = True
+            except Exception:
+                pass  # archivo no válido como imagen: se trata como "sin foto"
+        if not insertada and ref_norm:
             sin_foto.append(ref_norm)
         if total:
             progreso(i / total)
